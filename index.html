@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Photo PowerPoint Slideshow Maker</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Photo deck builder</p>
+            <h1>Make a PowerPoint slideshow from your photos</h1>
+          </div>
+          <button class="primary" id="downloadBtn" disabled>Download PowerPoint</button>
+        </header>
+
+        <section class="drop-zone" id="dropZone">
+          <input id="photoInput" type="file" accept="image/*" multiple />
+          <div class="drop-copy">
+            <strong>Drop photos here</strong>
+            <span id="importStatus">or choose images from your computer</span>
+          </div>
+          <button class="secondary" id="chooseBtn">Choose Photos</button>
+        </section>
+
+        <section class="stage" aria-live="polite">
+          <div class="slide-preview" id="slidePreview">
+            <div class="empty-state">
+              <strong>Your slide will show here</strong>
+              <span>Add photos to start building the deck.</span>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <aside class="sidebar">
+        <div class="panel">
+          <h2>Slides</h2>
+          <div class="slide-list" id="slideList"></div>
+        </div>
+
+        <div class="panel controls" id="editorPanel">
+          <h2>Edit selected photo</h2>
+          <label>
+            Slide title
+            <input id="titleInput" type="text" placeholder="Optional title" disabled />
+          </label>
+          <label>
+            Speaker note
+            <textarea id="noteInput" rows="3" placeholder="Optional note for this slide" disabled></textarea>
+          </label>
+          <label>
+            Photo style
+            <select id="fitSelect" disabled>
+              <option value="contain">Fit whole photo</option>
+              <option value="cover">Fill slide</option>
+            </select>
+          </label>
+          <label>
+            Background
+            <input id="bgInput" type="color" value="#111827" disabled />
+          </label>
+          <label>
+            Rotation
+            <input id="rotateInput" type="range" min="-180" max="180" step="1" value="0" disabled />
+            <output id="rotateValue">0 degrees</output>
+          </label>
+          <div class="button-row">
+            <button id="moveUpBtn" class="secondary" disabled>Move up</button>
+            <button id="moveDownBtn" class="secondary" disabled>Move down</button>
+          </div>
+          <button id="removeBtn" class="danger" disabled>Remove slide</button>
+        </div>
+      </aside>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
