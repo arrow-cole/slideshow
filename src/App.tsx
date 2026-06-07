@@ -3,7 +3,7 @@ import { DropZone } from "./components/DropZone";
 import { SlidePreview } from "./components/SlidePreview";
 import { SlideList } from "./components/SlideList";
 import { Editor } from "./components/Editor";
-import { normalizeImage } from "./lib/image";
+import { processImage } from "./lib/image";
 import { buildPptx } from "./lib/pptx";
 import type { Slide } from "./types";
 
@@ -27,9 +27,9 @@ export default function App() {
 
     const added: Slide[] = [];
     for (let i = 0; i < files.length; i++) {
-      const normalized = await normalizeImage(files[i]);
+      const processed = await processImage(files[i]);
       added.push({
-        ...normalized,
+        ...processed,
         background: "#111827",
         fit: "contain",
         note: "",

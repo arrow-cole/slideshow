@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { Slide } from "../types";
 
 interface SlidePreviewProps {
@@ -5,6 +6,19 @@ interface SlidePreviewProps {
 }
 
 export function SlidePreview({ slide }: SlidePreviewProps) {
+  const blob = slide?.blob ?? null;
+  const [url, setUrl] = useState("");
+
+  useEffect(() => {
+    if (!blob) {
+      setUrl("");
+      return;
+    }
+    const objectUrl = URL.createObjectURL(blob);
+    setUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [blob]);
+
   if (!slide) {
     return (
       <div className="slide-preview" style={{ background: "#111827" }}>
@@ -18,12 +32,14 @@ export function SlidePreview({ slide }: SlidePreviewProps) {
 
   return (
     <div className="slide-preview" style={{ background: slide.background }}>
-      <img
-        className={`preview-photo ${slide.fit}`}
-        src={slide.dataUrl}
-        alt=""
-        style={{ transform: `rotate(${slide.rotate}deg)` }}
-      />
+      {url ? (
+        <img
+          className={`preview-photo ${slide.fit}`}
+          src={url}
+          alt=""
+          style={{ transform: `rotate(${slide.rotate}deg)` }}
+        />
+      ) : null}
       {slide.title ? <div className="preview-title">{slide.title}</div> : null}
     </div>
   );

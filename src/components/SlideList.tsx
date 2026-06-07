@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { Slide } from "../types";
 
 interface SlideListProps {
@@ -6,7 +7,7 @@ interface SlideListProps {
   onSelect: (index: number) => void;
 }
 
-export function SlideList({ slides, selectedIndex, onSelect }: SlideListProps) {
+function SlideListImpl({ slides, selectedIndex, onSelect }: SlideListProps) {
   if (!slides.length) {
     return (
       <div className="slide-list">
@@ -25,7 +26,7 @@ export function SlideList({ slides, selectedIndex, onSelect }: SlideListProps) {
           onClick={() => onSelect(index)}
         >
           <span className="thumb">
-            <img src={slide.dataUrl} alt="" />
+            <img src={slide.thumbnail} alt="" loading="lazy" />
           </span>
           <span>
             <span className="slide-name">{slide.title || `Slide ${index + 1}`}</span>
@@ -36,3 +37,5 @@ export function SlideList({ slides, selectedIndex, onSelect }: SlideListProps) {
     </div>
   );
 }
+
+export const SlideList = memo(SlideListImpl);

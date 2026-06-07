@@ -1,0 +1,1 @@
+- [Image pipeline memory model](image-pipeline.md) — slides store compressed Blobs + tiny thumbnails, never full-res data URLs; required for 1000+ photos.

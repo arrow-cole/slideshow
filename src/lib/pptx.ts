@@ -1,5 +1,5 @@
 import type { Slide } from "../types";
-import { SimpleZip, dataUrlToBytes } from "./zip";
+import { SimpleZip } from "./zip";
 import { escapeXml } from "./xml";
 
 const slideW = 13.333333;
@@ -48,16 +48,17 @@ export async function buildPptx(deckSlides: Slide[]): Promise<Blob> {
     zip.file("ppt/notesMasters/_rels/notesMaster1.xml.rels", notesMasterRels());
   }
 
-  deckSlides.forEach((slide, i) => {
+  for (let i = 0; i < deckSlides.length; i++) {
+    const slide = deckSlides[i];
     const n = i + 1;
     zip.file(`ppt/slides/slide${n}.xml`, slideXml(slide, n));
     zip.file(`ppt/slides/_rels/slide${n}.xml.rels`, slideRels(n, slide.extension, Boolean(slide.note)));
-    zip.file(`ppt/media/image${n}.${slide.extension}`, dataUrlToBytes(slide.dataUrl));
+    zip.file(`ppt/media/image${n}.${slide.extension}`, new Uint8Array(await slide.blob.arrayBuffer()));
     if (slide.note) {
       zip.file(`ppt/notesSlides/notesSlide${n}.xml`, notesXml(slide.note));
       zip.file(`ppt/notesSlides/_rels/notesSlide${n}.xml.rels`, notesRels(n));
     }
-  });
+  }
 
   return zip.generate("application/vnd.openxmlformats-officedocument.presentationml.presentation");
 }

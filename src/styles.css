@@ -250,6 +250,8 @@ label,
   border: 2px solid transparent;
   border-radius: 8px;
   color: inherit;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 72px;
   display: grid;
   gap: 12px;
   grid-template-columns: 72px minmax(0, 1fr);

@@ -12,14 +12,14 @@ export class SimpleZip {
   }
 
   generate(type: string): Blob {
-    const chunks: Uint8Array[] = [];
+    const parts: Uint8Array[] = [];
     const central: Uint8Array[] = [];
     let offset = 0;
 
     for (const entry of this.files) {
       const nameBytes = new TextEncoder().encode(entry.name);
       const crc = crc32(entry.bytes);
-      const local = concatBytes([
+      const header = concatBytes([
         u32(0x04034b50),
         u16(20),
         u16(0),
@@ -32,9 +32,8 @@ export class SimpleZip {
         u16(nameBytes.length),
         u16(0),
         nameBytes,
-        entry.bytes,
       ]);
-      chunks.push(local);
+      parts.push(header, entry.bytes);
       central.push(
         concatBytes([
           u32(0x02014b50),
@@ -57,10 +56,9 @@ export class SimpleZip {
           nameBytes,
         ]),
       );
-      offset += local.length;
+      offset += header.length + entry.bytes.length;
     }
 
-    const centralOffset = offset;
     const centralBytes = concatBytes(central);
     const end = concatBytes([
       u32(0x06054b50),
@@ -69,12 +67,12 @@ export class SimpleZip {
       u16(this.files.length),
       u16(this.files.length),
       u32(centralBytes.length),
-      u32(centralOffset),
+      u32(offset),
       u16(0),
     ]);
 
-    const all = concatBytes([...chunks, centralBytes, end]);
-    return new Blob([all as unknown as BlobPart], { type });
+    parts.push(centralBytes, end);
+    return new Blob(parts as unknown as BlobPart[], { type });
   }
 }
 
@@ -113,12 +111,4 @@ function concatBytes(parts: Uint8Array[]): Uint8Array {
     offset += part.length;
   }
   return output;
-}
-
-export function dataUrlToBytes(dataUrl: string): Uint8Array {
-  const base64 = dataUrl.split(",")[1];
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
 }
