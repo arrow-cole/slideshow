@@ -3,9 +3,20 @@ import { DropZone } from "./components/DropZone";
 import { SlidePreview } from "./components/SlidePreview";
 import { SlideList } from "./components/SlideList";
 import { Editor } from "./components/Editor";
-import { processImage } from "./lib/image";
+import { processFiles } from "./lib/imageProcessor";
 import { buildPptx } from "./lib/pptx";
-import type { Slide } from "./types";
+import type { ProcessedImage, Slide } from "./types";
+
+function toSlide(image: ProcessedImage): Slide {
+  return {
+    ...image,
+    background: "#111827",
+    fit: "contain",
+    note: "",
+    rotate: 0,
+    title: "",
+  };
+}
 
 export default function App() {
   const [slides, setSlides] = useState<Slide[]>([]);
@@ -23,28 +34,24 @@ export default function App() {
 
     const startCount = slides.length;
     setIsImporting(true);
-    setImportStatus(`Adding ${files.length} photo${files.length === 1 ? "" : "s"}...`);
+    setImportStatus(`Processing 0 of ${files.length} photo${files.length === 1 ? "" : "s"}...`);
 
-    const added: Slide[] = [];
-    for (let i = 0; i < files.length; i++) {
-      const processed = await processImage(files[i]);
-      added.push({
-        ...processed,
-        background: "#111827",
-        fit: "contain",
-        note: "",
-        rotate: 0,
-        title: "",
-      });
-      setImportStatus(`Added ${i + 1} of ${files.length} photo${files.length === 1 ? "" : "s"}...`);
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
+    const { ok, failed } = await processFiles(files, {
+      onProgress: (doneCount, totalCount) => {
+        setImportStatus(`Processing ${doneCount} of ${totalCount} photo${totalCount === 1 ? "" : "s"}...`);
+      },
+      onCommit: (batch) => {
+        setSlides((prev) => [...prev, ...batch.map(toSlide)]);
+        setSelectedIndex((current) => (current === -1 ? startCount : current));
+      },
+    });
 
-    const total = startCount + added.length;
-    setSlides((prev) => [...prev, ...added]);
-    setSelectedIndex((current) => (current === -1 && total ? 0 : current));
+    const total = startCount + ok;
     setIsImporting(false);
-    setImportStatus(`${total} photo${total === 1 ? "" : "s"} ready. Add more anytime.`);
+    const skipped = failed
+      ? ` ${failed} photo${failed === 1 ? "" : "s"} couldn't be read and ${failed === 1 ? "was" : "were"} skipped.`
+      : "";
+    setImportStatus(`${total} photo${total === 1 ? "" : "s"} ready. Add more anytime.${skipped}`);
   }
 
   function updateSelected(patch: Partial<Slide>) {
