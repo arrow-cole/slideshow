@@ -1,242 +1,12 @@
+import type { Slide } from "../types";
+import { SimpleZip, dataUrlToBytes } from "./zip";
+import { escapeXml } from "./xml";
+
 const slideW = 13.333333;
 const slideH = 7.5;
 const emu = 914400;
-const slides = [];
-let selectedIndex = -1;
-let isImporting = false;
 
-const els = {
-  bgInput: document.getElementById("bgInput"),
-  chooseBtn: document.getElementById("chooseBtn"),
-  downloadBtn: document.getElementById("downloadBtn"),
-  dropZone: document.getElementById("dropZone"),
-  fitSelect: document.getElementById("fitSelect"),
-  importStatus: document.getElementById("importStatus"),
-  moveDownBtn: document.getElementById("moveDownBtn"),
-  moveUpBtn: document.getElementById("moveUpBtn"),
-  noteInput: document.getElementById("noteInput"),
-  photoInput: document.getElementById("photoInput"),
-  preview: document.getElementById("slidePreview"),
-  removeBtn: document.getElementById("removeBtn"),
-  rotateInput: document.getElementById("rotateInput"),
-  rotateValue: document.getElementById("rotateValue"),
-  slideList: document.getElementById("slideList"),
-  titleInput: document.getElementById("titleInput"),
-};
-
-els.chooseBtn.addEventListener("click", () => els.photoInput.click());
-els.photoInput.addEventListener("change", (event) => addFiles(event.target.files));
-els.downloadBtn.addEventListener("click", downloadPowerPoint);
-els.fitSelect.addEventListener("change", updateSelectedFromControls);
-els.bgInput.addEventListener("input", updateSelectedFromControls);
-els.rotateInput.addEventListener("input", updateSelectedFromControls);
-els.titleInput.addEventListener("input", updateSelectedFromControls);
-els.noteInput.addEventListener("input", updateSelectedFromControls);
-els.moveUpBtn.addEventListener("click", () => moveSelected(-1));
-els.moveDownBtn.addEventListener("click", () => moveSelected(1));
-els.removeBtn.addEventListener("click", removeSelected);
-
-["dragenter", "dragover"].forEach((type) => {
-  els.dropZone.addEventListener(type, (event) => {
-    event.preventDefault();
-    els.dropZone.classList.add("is-dragging");
-  });
-});
-
-["dragleave", "drop"].forEach((type) => {
-  els.dropZone.addEventListener(type, () => els.dropZone.classList.remove("is-dragging"));
-});
-
-els.dropZone.addEventListener("drop", (event) => {
-  event.preventDefault();
-  addFiles(event.dataTransfer.files);
-});
-
-async function addFiles(fileList) {
-  const files = [...fileList].filter((file) => file.type.startsWith("image/"));
-  if (!files.length) return;
-
-  isImporting = true;
-  setImportStatus(`Adding ${files.length} photo${files.length === 1 ? "" : "s"}...`);
-  syncControls();
-
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    const normalized = await normalizeImage(file);
-    slides.push({
-      ...normalized,
-      background: "#111827",
-      fit: "contain",
-      note: "",
-      rotate: 0,
-      title: "",
-    });
-    setImportStatus(`Added ${i + 1} of ${files.length} photo${files.length === 1 ? "" : "s"}...`);
-    await yieldToBrowser();
-  }
-
-  if (selectedIndex === -1 && slides.length) selectedIndex = 0;
-  isImporting = false;
-  setImportStatus(`${slides.length} photo${slides.length === 1 ? "" : "s"} ready. Add more anytime.`);
-  els.photoInput.value = "";
-  render();
-}
-
-async function normalizeImage(file) {
-  const source = await fileToDataUrl(file);
-  if (file.type === "image/png" || file.type === "image/jpeg") {
-    const dims = await getImageDimensions(source);
-    return {
-      dataUrl: source,
-      extension: file.type === "image/png" ? "png" : "jpg",
-      height: dims.height,
-      imageType: file.type,
-      width: dims.width,
-    };
-  }
-
-  const image = await loadImage(source);
-  const canvas = document.createElement("canvas");
-  canvas.width = image.naturalWidth;
-  canvas.height = image.naturalHeight;
-  canvas.getContext("2d").drawImage(image, 0, 0);
-  return {
-    dataUrl: canvas.toDataURL("image/jpeg", 0.92),
-    extension: "jpg",
-    height: image.naturalHeight,
-    imageType: "image/jpeg",
-    width: image.naturalWidth,
-  };
-}
-
-function render() {
-  renderList();
-  renderPreview();
-  syncControls();
-}
-
-function renderList() {
-  els.slideList.innerHTML = "";
-  if (!slides.length) {
-    els.slideList.innerHTML = '<p class="meta">No photos yet.</p>';
-    return;
-  }
-
-  const fragment = document.createDocumentFragment();
-  slides.forEach((slide, index) => {
-    const button = document.createElement("button");
-    button.className = `slide-card ${index === selectedIndex ? "is-selected" : ""}`;
-    button.type = "button";
-    button.addEventListener("click", () => {
-      selectedIndex = index;
-      render();
-    });
-    button.innerHTML = `
-      <span class="thumb"><img src="${slide.dataUrl}" alt=""></span>
-      <span>
-        <span class="slide-name">${escapeHtml(slide.title || `Slide ${index + 1}`)}</span>
-        <span class="meta">Slide ${index + 1}</span>
-      </span>
-    `;
-    fragment.append(button);
-  });
-  els.slideList.append(fragment);
-}
-
-function renderPreview() {
-  const slide = slides[selectedIndex];
-  if (!slide) {
-    els.preview.style.background = "#111827";
-    els.preview.innerHTML = `
-      <div class="empty-state">
-        <strong>Your slide will show here</strong>
-        <span>Add photos to start building the deck.</span>
-      </div>
-    `;
-    return;
-  }
-
-  els.preview.style.background = slide.background;
-  els.preview.innerHTML = `
-    <img class="preview-photo ${slide.fit}" src="${slide.dataUrl}" alt="">
-    ${slide.title ? `<div class="preview-title">${escapeHtml(slide.title)}</div>` : ""}
-  `;
-  els.preview.querySelector(".preview-photo").style.transform = `rotate(${slide.rotate}deg)`;
-}
-
-function syncControls() {
-  const slide = slides[selectedIndex];
-  const enabled = Boolean(slide);
-  [
-    els.bgInput,
-    els.fitSelect,
-    els.moveDownBtn,
-    els.moveUpBtn,
-    els.noteInput,
-    els.removeBtn,
-    els.rotateInput,
-    els.titleInput,
-  ].forEach((control) => (control.disabled = !enabled));
-
-  els.downloadBtn.disabled = !slides.length || isImporting;
-  els.chooseBtn.disabled = isImporting;
-  if (!slide) return;
-  els.bgInput.value = slide.background;
-  els.fitSelect.value = slide.fit;
-  els.noteInput.value = slide.note;
-  els.rotateInput.value = slide.rotate;
-  els.rotateValue.textContent = `${slide.rotate} degrees`;
-  els.titleInput.value = slide.title;
-  els.moveUpBtn.disabled = selectedIndex <= 0;
-  els.moveDownBtn.disabled = selectedIndex >= slides.length - 1;
-}
-
-function updateSelectedFromControls() {
-  const slide = slides[selectedIndex];
-  if (!slide) return;
-  slide.background = els.bgInput.value;
-  slide.fit = els.fitSelect.value;
-  slide.note = els.noteInput.value;
-  slide.rotate = Number(els.rotateInput.value);
-  slide.title = els.titleInput.value;
-  render();
-}
-
-function moveSelected(direction) {
-  const nextIndex = selectedIndex + direction;
-  if (nextIndex < 0 || nextIndex >= slides.length) return;
-  const [slide] = slides.splice(selectedIndex, 1);
-  slides.splice(nextIndex, 0, slide);
-  selectedIndex = nextIndex;
-  render();
-}
-
-function removeSelected() {
-  if (selectedIndex < 0) return;
-  slides.splice(selectedIndex, 1);
-  selectedIndex = slides.length ? Math.min(selectedIndex, slides.length - 1) : -1;
-  render();
-}
-
-async function downloadPowerPoint() {
-  if (!slides.length || isImporting) return;
-  els.downloadBtn.disabled = true;
-  els.downloadBtn.textContent = `Building ${slides.length} slides...`;
-  try {
-    const blob = await buildPptx(slides);
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "photo-slideshow.pptx";
-    link.click();
-    URL.revokeObjectURL(url);
-  } finally {
-    els.downloadBtn.disabled = false;
-    els.downloadBtn.textContent = "Download PowerPoint";
-  }
-}
-
-async function buildPptx(deckSlides) {
+export async function buildPptx(deckSlides: Slide[]): Promise<Blob> {
   const zip = new SimpleZip();
   const hasNotes = deckSlides.some((slide) => slide.note);
   const contentTypes = [
@@ -256,9 +26,9 @@ async function buildPptx(deckSlides) {
     contentTypes.push('<Override PartName="/ppt/notesMasters/notesMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.notesMaster+xml"/>');
   }
 
-  deckSlides.forEach((_, i) => {
+  deckSlides.forEach((slide, i) => {
     contentTypes.push(`<Override PartName="/ppt/slides/slide${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`);
-    if (deckSlides[i].note) {
+    if (slide.note) {
       contentTypes.push(`<Override PartName="/ppt/notesSlides/notesSlide${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml"/>`);
     }
   });
@@ -292,7 +62,7 @@ async function buildPptx(deckSlides) {
   return zip.generate("application/vnd.openxmlformats-officedocument.presentationml.presentation");
 }
 
-function presentationXml(count) {
+function presentationXml(count: number): string {
   const slideIds = Array.from({ length: count }, (_, i) => `<p:sldId id="${256 + i}" r:id="rId${i + 2}"/>`).join("");
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
@@ -303,7 +73,7 @@ function presentationXml(count) {
 </p:presentation>`;
 }
 
-function presentationRels(count) {
+function presentationRels(count: number): string {
   const rels = [
     '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>',
   ];
@@ -314,7 +84,7 @@ function presentationRels(count) {
   return relsXml(rels);
 }
 
-function slideXml(slide, slideNumber) {
+function slideXml(slide: Slide, slideNumber: number): string {
   const bg = slide.background.replace("#", "").toUpperCase();
   const img = imagePlacement(slide);
   const title = slide.title ? titleShape(slide.title) : "";
@@ -338,7 +108,14 @@ function slideXml(slide, slideNumber) {
 </p:sld>`;
 }
 
-function imagePlacement(slide) {
+interface Placement {
+  cx: number;
+  cy: number;
+  x: number;
+  y: number;
+}
+
+function imagePlacement(slide: Slide): Placement {
   const slideRatio = slideW / slideH;
   const imageRatio = slide.width / slide.height;
   let width = slideW;
@@ -361,7 +138,7 @@ function imagePlacement(slide) {
   };
 }
 
-function titleShape(title) {
+function titleShape(title: string): string {
   return `<p:sp>
     <p:nvSpPr><p:cNvPr id="3" name="Slide Title"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
     <p:spPr><a:xfrm><a:off x="${Math.round(0.48 * emu)}" y="${Math.round(0.35 * emu)}"/><a:ext cx="${Math.round(12.35 * emu)}" cy="${Math.round(0.85 * emu)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr>
@@ -369,7 +146,7 @@ function titleShape(title) {
   </p:sp>`;
 }
 
-function slideRels(slideNumber, extension, hasNotes) {
+function slideRels(slideNumber: number, extension: string, hasNotes: boolean): string {
   const rels = [
     '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>',
     `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image${slideNumber}.${extension}"/>`,
@@ -380,7 +157,7 @@ function slideRels(slideNumber, extension, hasNotes) {
   return relsXml(rels);
 }
 
-function notesXml(note) {
+function notesXml(note: string): string {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:notes xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
   <p:cSld><p:spTree>
@@ -391,14 +168,14 @@ function notesXml(note) {
 </p:notes>`;
 }
 
-function notesRels(slideNumber) {
+function notesRels(slideNumber: number): string {
   return relsXml([
     '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster" Target="../notesMasters/notesMaster1.xml"/>',
     `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="../slides/slide${slideNumber}.xml"/>`,
   ]);
 }
 
-function notesMasterXml() {
+function notesMasterXml(): string {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:notesMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
   <p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr></p:spTree></p:cSld>
@@ -406,19 +183,19 @@ function notesMasterXml() {
 </p:notesMaster>`;
 }
 
-function notesMasterRels() {
+function notesMasterRels(): string {
   return relsXml([
     '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme1.xml"/>',
   ]);
 }
 
-function packageRels() {
+function packageRels(): string {
   return relsXml([
     '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>',
   ]);
 }
 
-function slideMasterXml() {
+function slideMasterXml(): string {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sldMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
   <p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr></p:spTree></p:cSld>
@@ -428,14 +205,14 @@ function slideMasterXml() {
 </p:sldMaster>`;
 }
 
-function slideMasterRels() {
+function slideMasterRels(): string {
   return relsXml([
     '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>',
     '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme1.xml"/>',
   ]);
 }
 
-function slideLayoutXml() {
+function slideLayoutXml(): string {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sldLayout xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" type="blank" preserve="1">
   <p:cSld name="Blank"><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr></p:spTree></p:cSld>
@@ -443,13 +220,13 @@ function slideLayoutXml() {
 </p:sldLayout>`;
 }
 
-function slideLayoutRels() {
+function slideLayoutRels(): string {
   return relsXml([
     '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster1.xml"/>',
   ]);
 }
 
-function themeXml() {
+function themeXml(): string {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Photo Slideshow">
   <a:themeElements>
@@ -460,175 +237,6 @@ function themeXml() {
 </a:theme>`;
 }
 
-function relsXml(rels) {
+function relsXml(rels: string[]): string {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels.join("")}</Relationships>`;
-}
-
-class SimpleZip {
-  constructor() {
-    this.files = [];
-  }
-
-  file(name, content) {
-    const bytes = typeof content === "string" ? new TextEncoder().encode(content) : content;
-    this.files.push({ bytes, name });
-  }
-
-  generate(type) {
-    const chunks = [];
-    const central = [];
-    let offset = 0;
-
-    for (const entry of this.files) {
-      const nameBytes = new TextEncoder().encode(entry.name);
-      const crc = crc32(entry.bytes);
-      const local = concatBytes([
-        u32(0x04034b50),
-        u16(20),
-        u16(0),
-        u16(0),
-        u16(0),
-        u16(0),
-        u32(crc),
-        u32(entry.bytes.length),
-        u32(entry.bytes.length),
-        u16(nameBytes.length),
-        u16(0),
-        nameBytes,
-        entry.bytes,
-      ]);
-      chunks.push(local);
-      central.push(
-        concatBytes([
-          u32(0x02014b50),
-          u16(20),
-          u16(20),
-          u16(0),
-          u16(0),
-          u16(0),
-          u16(0),
-          u32(crc),
-          u32(entry.bytes.length),
-          u32(entry.bytes.length),
-          u16(nameBytes.length),
-          u16(0),
-          u16(0),
-          u16(0),
-          u16(0),
-          u32(0),
-          u32(offset),
-          nameBytes,
-        ]),
-      );
-      offset += local.length;
-    }
-
-    const centralOffset = offset;
-    const centralBytes = concatBytes(central);
-    const end = concatBytes([
-      u32(0x06054b50),
-      u16(0),
-      u16(0),
-      u16(this.files.length),
-      u16(this.files.length),
-      u32(centralBytes.length),
-      u32(centralOffset),
-      u16(0),
-    ]);
-
-    return new Blob([concatBytes([...chunks, centralBytes, end])], { type });
-  }
-}
-
-function crc32(bytes) {
-  let crc = -1;
-  for (let i = 0; i < bytes.length; i++) {
-    crc = (crc >>> 8) ^ crcTable[(crc ^ bytes[i]) & 0xff];
-  }
-  return (crc ^ -1) >>> 0;
-}
-
-const crcTable = (() => {
-  const table = new Uint32Array(256);
-  for (let n = 0; n < 256; n++) {
-    let c = n;
-    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    table[n] = c >>> 0;
-  }
-  return table;
-})();
-
-function u16(value) {
-  return Uint8Array.of(value & 255, (value >>> 8) & 255);
-}
-
-function u32(value) {
-  return Uint8Array.of(value & 255, (value >>> 8) & 255, (value >>> 16) & 255, (value >>> 24) & 255);
-}
-
-function concatBytes(parts) {
-  const size = parts.reduce((total, part) => total + part.length, 0);
-  const output = new Uint8Array(size);
-  let offset = 0;
-  for (const part of parts) {
-    output.set(part, offset);
-    offset += part.length;
-  }
-  return output;
-}
-
-function dataUrlToBytes(dataUrl) {
-  const base64 = dataUrl.split(",")[1];
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
-
-function setImportStatus(message) {
-  els.importStatus.textContent = message;
-}
-
-function yieldToBrowser() {
-  return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
-function fileToDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-function loadImage(src) {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = reject;
-    image.src = src;
-  });
-}
-
-async function getImageDimensions(src) {
-  const image = await loadImage(src);
-  return { height: image.naturalHeight, width: image.naturalWidth };
-}
-
-function escapeXml(value) {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
-function escapeHtml(value) {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }

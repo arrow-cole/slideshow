@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/main.tsx","./src/types.ts","./src/components/DropZone.tsx","./src/components/Editor.tsx","./src/components/SlideList.tsx","./src/components/SlidePreview.tsx","./src/lib/image.ts","./src/lib/pptx.ts","./src/lib/xml.ts","./src/lib/zip.ts"],"errors":true,"version":"5.9.3"}
